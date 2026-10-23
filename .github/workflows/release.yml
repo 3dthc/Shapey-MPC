@@ -1,0 +1,37 @@
+# Builds one of the two plugins in GitHub Actions and attaches its zip to a DRAFT release (tools pinned to one
+# mpc-vst-plugins commit, in both places). Install that zip on an MPC, test it, then publish the draft.
+#   Actions -> Release -> Run workflow: plugin, version
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: Which plugin
+        type: choice
+        options: [shapey-eq, shapey-5-band-eq]
+        required: true
+      version:
+        description: Version, e.g. 1.6.1
+        type: string
+        required: true
+      dry_run:
+        description: Build and package only (zip and previews as run artifacts), no draft release
+        type: boolean
+        default: false
+
+jobs:
+  vst:
+    uses: sd88me/mpc-vst-plugins/.github/workflows/vst-release.yml@8aa8d3552a55a93eb4034bb9bbb02cbe91d69b61
+    permissions: { contents: write }
+    with:
+      tag: ${{ inputs.plugin }}-vst-v${{ inputs.version }}
+      version: ${{ inputs.version }}
+      tools_ref: 8aa8d3552a55a93eb4034bb9bbb02cbe91d69b61
+      vst_dir: ${{ inputs.plugin == 'shapey-eq' && 'vst' || 'vst5' }}
+      build: '"$MPC_VST/tools/build_port.sh" ${{ inputs.plugin == ''shapey-eq'' && ''vst'' || ''vst5'' }}/vst.json'
+      host_test: '"$MPC_VST/tools/test_port.sh" ${{ inputs.plugin == ''shapey-eq'' && ''vst'' || ''vst5'' }}/vst.json'
+      about: ${{ inputs.plugin == 'shapey-eq' && 'An 8-band parametric EQ you shape by touch, with a live analyzer.' || 'A 5-band parametric EQ you shape by touch, every band on its own lane, with a live analyzer.' }}
+      plugin_id: ${{ inputs.plugin }}
+      license: MIT
+      dry_run: ${{ inputs.dry_run }}
