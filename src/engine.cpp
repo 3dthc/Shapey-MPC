@@ -116,7 +116,8 @@ struct Shapey {
     int touch = 0, touch_hold = 0;            /* glowing column + 1, 0 = none */
     int grab = 0, grab_hold = 0;              /* the glowing ring's place on the lane (1..NDOT; with LANES, + lane * NDOT), 0 = none */
     unsigned char col_touched[NCOL];           /* columns a touch moved on the host's side: report the engine's back */
-    int band_changed[NB];                      /* bit 0 on, 1 freq, 2 gain: changed by a touch, to report */
+    int band_changed[NB];                      /* bit 0 on, 1 freq, 2 gain, 3 Q: changed by a touch, to report */
+    int xy_drag = 0;                           /* desktop: a band held on the graph by the mouse (set_param "xy") */
     int pend_sel = -1;                         /* a band the host just changed (-2: several, e.g. a preset): selected next block */
     unsigned noise = 1;
     /* analyzer */
@@ -283,10 +284,12 @@ static int band_key(const char *key, const char **field)
     return key[1] - '1';
 }
 
+static void xy_event(Shapey *p, const char *val);
 static void set_param(void *inst, const char *key, const char *val)
 {
     Shapey *p = static_cast<Shapey *>(inst);
     if (!p || !key || !val) return;
+    if (!strcmp(key, "xy")) { xy_event(p, val); return; }   /* desktop: the mouse on the graph */
     if (!strcmp(key, "state")) {
         /* "e3 nbands bypass theme master analyzer sel  then per band: on pos gain qpos slope type"
          * (e2: 8 bands, no type; e1: no analyzer, sel either -- older saves keep each band's starting type) */
@@ -408,6 +411,61 @@ static void set_param(void *inst, const char *key, const char *val)
     }
 }
 
+/* Desktop only (the plugin window's "xy" area over the graph, vst.json desktop_items): the mouse moves bands freely.
+ * "down x y" grabs the band whose point (frequency across, gain up the graph) is nearest, within GRAB_PX, else the
+ * selected one; "drag" moves it anywhere (any frequency, gain in 0.1 dB); "wheel+"/"wheel-" is its Q (cuts: slope).
+ * x, y are 0..1 across the graph, top left 0 0. The MPC screen keeps its own touch columns. */
+static const float GRAB_PX = 28.0f, GRAPH_W = 1152.0f, GRAPH_H = NB < 8 ? 172.0f : 130.0f;   /* the graph, in skin pixels */
+static void xy_move(Shapey *p, float x, float y)
+{
+    Band &b = p->b[p->sel];
+    int t = b.pending >= 0 ? b.pending : b.type;
+    b.pos = clampf(x * 1000.0f, 0, 1000);
+    p->band_changed[p->sel] |= 2;
+    if (has_gain(t)) {
+        b.gain = clampf(lrintf((0.5f - y) * 2.0f * CURVE_DB * 10.0f), -10 * CURVE_DB, 10 * CURVE_DB);
+        p->band_changed[p->sel] |= 4;
+    }
+    if (!b.on) { b.on = 1; p->band_changed[p->sel] |= 1; }
+    b.settled = false;
+    p->grab_hold = TOUCH_HOLD;
+    p->curve_dirty = 1;
+    p->curve_wait = 0;
+}
+static void xy_event(Shapey *p, const char *val)
+{
+    char what[16] = "";
+    float x = 0, y = 0;
+    if (sscanf(val, "%15s %f %f", what, &x, &y) < 1) return;
+    if (!strcmp(what, "down")) {
+        int best = -1;
+        float bd = GRAB_PX * GRAB_PX;
+        for (int i = 0; i < NB; ++i) {
+            const Band &b = p->b[i];
+            if (!b.on) continue;
+            int t = b.pending >= 0 ? b.pending : b.type;
+            float by = has_gain(t) ? 0.5f - b.gain / (20.0f * CURVE_DB) : 0.5f;
+            float dx = (x - b.pos / 1000.0f) * GRAPH_W, dy = (y - by) * GRAPH_H, d = dx * dx + dy * dy;
+            if (d < bd) { bd = d; best = i; }
+        }
+        if (best >= 0 && best != p->sel) { p->sel = best; p->sel_changed = 1; p->curve_dirty = 1; }
+        p->xy_drag = 1;
+        if (best < 0) xy_move(p, x, y);   /* nothing under the mouse: the selected band jumps there, as a touch does */
+    } else if (!strcmp(what, "drag")) {
+        if (p->xy_drag) xy_move(p, x, y);
+    } else if (!strcmp(what, "up")) {
+        p->xy_drag = 0;
+    } else if (!strcmp(what, "wheel+") || !strcmp(what, "wheel-")) {
+        Band &b = p->b[p->sel];
+        int t = b.pending >= 0 ? b.pending : b.type, d = what[5] == '+' ? 1 : -1;
+        if (is_cut(t)) { b.slope = (int)clampf((float)(b.slope + d), 0, 3); p->band_changed[p->sel] |= 4; }
+        else { b.qpos = clampf(b.qpos + 2.0f * d, 0, 100); p->band_changed[p->sel] |= 8; }
+        b.settled = false;
+        p->curve_dirty = 1;
+        p->curve_wait = 0;
+    }
+}
+
 static int fmt_hz(char *buf, int len, float hz)
 {
     if (hz >= 10000.0f) return snprintf(buf, (size_t)len, "%.1f kHz", hz / 1000.0f);
@@ -490,9 +548,9 @@ extern "C" int mpc_engine_changed(void *inst, char *key, int len)
     if (p->sel_changed) { p->sel_changed = 0; snprintf(key, (size_t)len, "sel"); return 1; }
     for (int i = 0; i < NB; ++i)
         if (p->band_changed[i]) {
-            int bit = p->band_changed[i] & 1 ? 1 : p->band_changed[i] & 2 ? 2 : 4;
+            int c = p->band_changed[i], bit = c & 1 ? 1 : c & 2 ? 2 : c & 4 ? 4 : 8;
             p->band_changed[i] &= ~bit;
-            snprintf(key, (size_t)len, "b%d_%s", i + 1, bit == 1 ? "on" : bit == 2 ? "freq" : "x");
+            snprintf(key, (size_t)len, "b%d_%s", i + 1, bit == 1 ? "on" : bit == 2 ? "freq" : bit == 4 ? "x" : "q");
             return 1;
         }
     if (p->curve_dirty) return 0;                    /* touched columns: once the curve is redrawn */

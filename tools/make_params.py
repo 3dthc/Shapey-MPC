@@ -86,6 +86,8 @@ def params(nb):
     # the analyzer: a switch, and a 72-column spectrum line the engine sets (display only)
     P += [{"key": "analyzer", "name": "Analyzer", "min": 0, "max": 1, "default": 0, "display": "int"}]
     P += [{"key": "a%d" % k, "name": "Spectrum %d" % (k + 1), "min": 0, "max": 24, "default": 0} for k in range(72)]
+    # desktop only: the plugin window's mouse on the graph, as text to the engine ("down x y" ...; vst.json desktop_items)
+    P += [{"key": "xy", "name": "Graph Mouse", "min": 0, "max": 1, "default": 0, "display": "string", "poll": False}]
     return P
 
 

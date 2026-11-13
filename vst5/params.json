@@ -189,6 +189,7 @@
     {"key": "a68", "name": "Spectrum 69", "min": 0, "max": 24, "default": 0},
     {"key": "a69", "name": "Spectrum 70", "min": 0, "max": 24, "default": 0},
     {"key": "a70", "name": "Spectrum 71", "min": 0, "max": 24, "default": 0},
-    {"key": "a71", "name": "Spectrum 72", "min": 0, "max": 24, "default": 0}
+    {"key": "a71", "name": "Spectrum 72", "min": 0, "max": 24, "default": 0},
+    {"key": "xy", "name": "Graph Mouse", "min": 0, "max": 1, "default": 0, "display": "string", "poll": false}
   ]
 }
