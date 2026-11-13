@@ -38,7 +38,6 @@ so it is for modded units. Gen1 devices (MPC Live/One/X/Key 61/Force); tested on
 
 Each release also has Shapey EQ and Shapey 5-Band EQ for a computer, with the same sound and touchscreen skin. A project saved on the MPC opens in MPC Desktop (controller mode) with the plugin in place.
 
-In the plugin window on a computer you can also drag any band's point straight on the graph (frequency and gain at once) and set its Q with the mouse wheel.
 
 ### Installing on macOS (Audio Unit and VST3)
 **Which zip?**
