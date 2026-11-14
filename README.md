@@ -1,5 +1,7 @@
 # Shapey EQ and Shapey 5-Band EQ
 
+[![Support me on Ko-fi](https://img.shields.io/badge/Support%20me%20on-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/3dthc)
+
 Two touch-first parametric EQs for Akai MPC OS standalone devices, as native VST2 audio effects built with
 [mpc-vst-plugins](https://github.com/sd88me/mpc-vst-plugins). They run on the same engine and come as **two separate
 plugins with their own releases**. Install either one or both; they show up in the plugin list under their own names.
